@@ -5,39 +5,54 @@
 #include <pthread.h>
 #include <stdint.h>
 
-pthread_t id[4];	//process list
-
-//level 1 page table.
-typedef struct {
-	pthread_t tid;	//thread ID
-	int pte;
-}pt1;
-
-//so we build a level 1 page table. 
-pt1 lev1[1024];
-
 //level 2 page table. 
 typedef struct {
-	int pte1;	//level 1 page table entry
-	int pte[1024];	//values stored are the index of bytes in memory. 
+	int val;	//used or not
+	int phys;	//store where it actually points to #block in physical memory. 
+	int pte;	//values stored are the index of bytes in memory. 
 }pt2;
 
-//and we build 1024 level 2 page table. 
-pt2 lev2[1024];
+typedef struct {
+	pthread_t tid;	//thread
+	//use the index of array to represent pt1 entry so no need to add here
+	pt2 lev2[1024];
+}pt1;
+
+pt1 lev1[4];
 
 //functions need to be created
 //return 0 on success
 
 void *thread(void *vargp);		//done
-void *cse320_malloc(int n);	
-void *cse320_virt_to_phys(void *vir);
+int cse320_malloc(int pte);		//done
+int cse320_virt_to_phys(int vir);
 int kill_x(pthread_t tid);	//done
 void list();	//done
 void mem_x(pthread_t tid);	//done
-int allocate(pthread_t tid);
-int read_xy(pthread_t tid, void *p);
+int allocate_x(pthread_t tid);	//done
+int read_xy(pthread_t tid, int addr);	//done
 int write_xyz(pthread_t tid, int addr, int var);
 
+int cse320_malloc(int pte){
+	int addr = 0;
+	addr = pte << 22;
+		int j;
+		for ( j = 0; j < 1024; j ++){
+			if (lev1[pte].lev2[j].val == 0){
+				addr = addr | ( j << 12);
+				lev1[pte].lev2[j].val = 1;
+				return addr;	//return the allocated address if generated
+			}
+		}
+		return 0;
+}
+
+int cse320_virt_to_phys(int vir){
+	int p1;
+	int p2;
+	p1 = vir >> 22;
+	p2 = (vir << 10) >> 22;
+}
 
 int create(){
 	int i;
@@ -45,11 +60,8 @@ int create(){
 	pthread_t tid;
 	pthread_create(&tid, NULL, thread, NULL);
 	for ( i = 0; i < 4; i++){
-		if ( id[i] < 1 ){
-			id[i] = tid;
-			lev1[i].pte = i;	//no more than 4 threads in total so we can do this.
+		if ( lev1[i].tid < 1 ){
 			lev1[i].tid = tid;	//added to first level page table. 
-			lev2[i].pte = i;	//assign a lev2 pt to this process. 
 			added = 1;
 			break;
 		}
@@ -68,14 +80,17 @@ int kill_X(pthread_t tid){
 	//clear corresponding page table. 
 	int i;
 	for ( i = 0; i < 4; i++){
-		if( id[i] == tid && lev1[i].tid == tid ){
-			id[i] = 0;
+		if( lev1[i].tid == tid ){
 			lev1[i].tid = 0;
-			lev2[lev1[i].pte]
-			lev1[i].pte = -1;	//to indicate unused entry. 
-			killed = 1;
+			int j;
+			for ( j = 0; j < 1024; j++)
+				lev1[i].lev2[j].val = 0;	//clear pt2 as well 
+			killed++;
 			break;
 		}
+	}
+	if ( killed != 1 ){
+		fputs("error when killing process X.\n", stdout);
 	}
 	return killed;
 }
@@ -85,13 +100,13 @@ void list(){
 	int i;
 	int printed = 0;
 	for ( i = 0; i < 4; i++){
-		if(id[i] != 0 ){
+		if(lev1[i].tid != 0 ){
 			if ( i == 0)
 				fputs("Process Number	Process ID\n", stdout);
 			char arr[4];
 			sprintf(arr, "%d", i);
 			char tid_s[128];
-			sprintf(tid_s, "%lu", id[i]);
+			sprintf(tid_s, "%lu", lev1[i].tid);
 			fputs(arr, stdout);
 			fputs("\t", stdout);
 			fputs(tid_s, stdout);
@@ -105,7 +120,7 @@ void list(){
 
 int mem_X(pthread_t tid){
 	int found = 0;
-	int i;
+	int i;	//index of the corresponding pt1
 	for ( i = 0; i < 4; i++){
 		if( lev1[i].tid == tid){
 			found = 1;	//if tid is found in current list, the value of i should be its index in lev1 pt. 
@@ -114,18 +129,42 @@ int mem_X(pthread_t tid){
 	}
 	if ( found != 1){
 		fputs("Process does not exist.\n", stdout);
-		return -1;
+		return found;
 	}else{
+		fputs("Addesses used by X:\n", stdout);
 		uint32_t addr = 0;
 		//put first level pte
-		addr = lev1[i].pte << 22;
+		addr = i << 22;	//i represents pt1 entry
 		int j;	//iterate the second level page table. 
 		for ( j = 0; j < 1024; j++){
-			
+			if ( lev1[i].lev2[j].val != 0 )	//j here can also represent entry num, as for pt1. 
+				addr = ( addr | (j << 12));	//one address is generated. 
+				printf("%x\n", addr);
 		}
+	}
+	return found;
+}
 
+int allocate_X(pthread_t tid){
+	int i;
+	int addr;
+	int found = 0;
+	for ( i = 0; i < 4; i++)
+		if ( lev1[i].tid == tid){
+			found = 1;
+			break;
+		}
+	if ( found != 1){
+		fputs("Process not found. \n", stdout);
+	}else{
+		return cse320_malloc(i);
 	}
 }
+
+int read_xy(pthread_t tid, int addr){
+	//read 
+}
+
 void main(){
 	fputs("Please select from the following option\ncreate\nkill X\nlist\nmem X\nallocate X\nread X Y\nwrite X Y Z\nexit\n", stdout);
 	char *args[5];
