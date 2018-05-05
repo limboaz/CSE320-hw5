@@ -166,6 +166,18 @@ int read_xy(pthread_t tid, int addr){
 }
 
 void main(){
+	//initialize the pipes.
+	int fifo_main, fifo_mem;
+	fifo_main = open("fifo_main", O_RDWR);
+	if ( fifo_main < 0 ){
+		fputs("Error opening fifo_main in main\n", stdout);
+		exit(-1);
+	}
+	fifo_mem = open("fifo_mem", O_RDWR);
+	if ( fifo_mem < 0 ){
+		fputs("Error opening fifo_mem in main\n", stdout);
+		exit(-1);
+	}
 	fputs("Please select from the following option\ncreate\nkill X\nlist\nmem X\nallocate X\nread X Y\nwrite X Y Z\nexit\n", stdout);
 	char *args[5];
 	char cmd[127];
