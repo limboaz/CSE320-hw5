@@ -96,6 +96,15 @@ int kill_X(pthread_t tid){
 	int i;
 	for ( i = 0; i < 4; i++){
 		if( lev1[i].tid == tid ){
+			int fifo_mem, fifo_main;
+			fifo_mem = open("fifo_mem", O_RDWR);
+			char mes[30];
+			sprintf(mes, "clean %d", i);
+			write(fifo_mem, mes, 30);
+			close(fifo_mem);
+			fifo_main = open("fifo_main", O_RDWR);
+			read(fifo_main, NULL, 0);
+			close(fifo_main);
 			lev1[i].tid = 0;
 			int j;
 			for ( j = 0; j < 1024; j++){
@@ -193,7 +202,18 @@ int allocate_X(pthread_t tid){
 }
 
 int read_xy(pthread_t tid, int addr){
-	//read 
+	int i;
+	int found = 0;
+	for ( i = 0; i < 4; i++){
+		if ( lev1[i].tid == tid){
+			found = 1;
+			break;
+		}
+	}
+	if ( found != 1){
+		printf("Process not found. \n");
+		return -1;
+	}
 	int phys;
 	char *val = malloc(128);
 	int value = 0;
@@ -209,6 +229,7 @@ int read_xy(pthread_t tid, int addr){
 	fifo_main = open("fifo_main", O_RDWR);
 	read(fifo_main, val, 128);
 	value = atoi(val); 
+	printf("%d\n", value);
 	free(val);
 	return value;
 
@@ -286,7 +307,7 @@ void main(){
 				print_binary(allocate_X(tid));
 			}else if(strncmp(cmd, "read", 4) == 0){
 				pthread_t tid = strtoul(args[0], NULL, 10);
-				int addr = atoi(args[2]);
+				int addr = atoi(args[1]);
 				read_xy(tid, addr);
 			}else if(strncmp(cmd, "write", 5) == 0){
 				//write

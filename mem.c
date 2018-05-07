@@ -37,8 +37,10 @@ void main(){
 			addr = atoi(p);
 			int val;
 			if ( addr % 4 == 0){
-				val = *((int *)(mem) + addr);
-				write(fifo_main, &val, sizeof(int));	//return the value to main
+				val = *((int *)(mem + addr));
+				char mes[30];
+				sprintf(mes, "%d", val);
+				write(fifo_main, mes, 30);	//return the value to main
 			}
 			else {
 				char mes[] = "Invalid address.\n";
@@ -54,8 +56,8 @@ void main(){
 			int val = atoi(p);
 			//some problem here. Should also know which section to deal with => need to translate 
 			if ( addr < 1024 && addr % 4 == 0 ){	//memory should not be out of bound & should be multiple of 4
-				*((int *)(mem) + addr) = val;	//writing the specified value into memory. 
-				
+				*((int *)(mem + addr)) = val;	//writing the specified value into memory. 
+				printf("addr: %d val:%d\n", addr, *((int*)(mem + addr)));
 			}else{
 				char mes[] = "Address out of range\n";
 				printf("%s", mes);
@@ -66,7 +68,13 @@ void main(){
 				int pt1 = atoi(p);
 				char mes[20];
 				sprintf(mes, "%d", cnt[pt1]);
+				cnt[pt1] += 4;
 				write(fifo_main, mes, 20);
+				
+		}else if ( strncmp(buf, "clean", 5) == 0){
+				p = strtok(NULL, " ");
+				int pt1 = atoi(p);
+				cnt[pt1] = pt1 * 256;
 				
 		}
 		close(fifo_main);
