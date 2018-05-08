@@ -1,0 +1,10 @@
+HW5 Documentation
+
+
+The homework should be run in two seperate processes. You need to run main first in order to create the pipes, then you run mem.
+
+The program will simply work as the hw doc indicated. Just make sure you run main before mem. 
+
+Please do "make clean" after every time you run it. 
+
+Please be lenient :) thank you! 

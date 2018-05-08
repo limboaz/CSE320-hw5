@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 //level 2 page table. 
 typedef struct {
@@ -42,22 +43,6 @@ int allocate_x(pthread_t tid);	//done
 int read_xy(pthread_t tid, int addr);	//done
 int write_xyz(pthread_t tid, int addr, int var);	//done
 
-int access_cache(int addr){
-	int i;
-	int accessed = 0;
-	for ( i = 0; i < 4; i++){
-		if ( cac[i].flag == 1 && cac[i].addr == addr ){
-			accessed = 1;
-			printf("Cache hit.\n");
-			return cac[i].val;
-		}
-	}
-	if ( accessed != 1 ){
-		printf("Cache miss.\n");
-		errno = -1;
-		return errno;
-	}
-}
 //this function is from stackoverflow
 void print_binary(int num){
 	int cnt;
@@ -88,8 +73,17 @@ int cse320_virt_to_phys(int vir){
 	p1 = vir >> 22;
 	p2 = (vir << 10) >> 22;
 	int addr;
-	addr = p1 * 256 + p2;
-	return addr;
+	if ( p1 > 4 || p1 < 0 || p2 > 255 || p2 < 0){
+		printf("Invalid Address.\n");
+		return -1;
+	}
+	if ( lev1[p1].lev2[p2].val == 1 ){
+		addr = lev1[p1].lev2[p2].phys;
+		return addr;
+	}else {
+		printf("Invalid address.\n");
+		return -1;
+	}
 }
 
 int create(){
@@ -115,6 +109,7 @@ void *thread(void *vargp){
 int kill_X(pthread_t tid){
 	int killed = 0;
 	pthread_cancel(tid);
+
 	//clear corresponding page table. 
 	int i;
 	for ( i = 0; i < 4; i++){
@@ -129,11 +124,24 @@ int kill_X(pthread_t tid){
 			read(fifo_main, NULL, 0);
 			close(fifo_main);
 			lev1[i].tid = 0;
-			int j;
+			uint32_t addr = 0;
+			//put first level pte
+			addr = i << 22; //i represents pt1 entry
+			int j;  //iterate the second level page table. 
 			for ( j = 0; j < 1024; j++){
-				lev1[i].lev2[j].val = 0;	//clear pt2 as well 
-				lev1[i].lev2[j].phys = 0;
-			}
+			    if ( lev1[i].lev2[j].val == 1 ){    //j here can also represent entry num, as for pt1. 
+			    	int k;
+					for ( k = 0; k < 4; k++){
+						if ( cac[k].addr == ( addr | (j << 12))){
+							cac[k].val = 0;
+							cac[k].addr = 0;
+							cac[k].flag = 0;
+						}  //one address is generated. 
+					}
+				}
+				lev1[i].lev2[j].val = 0;
+				lev1[i].lev2[j].phys = 0;   
+			} 
 			killed++;
 			break;
 		}
@@ -231,6 +239,7 @@ int read_xy(pthread_t tid, int addr){
 		if ( cac[j].flag == 1 && cac[j].addr == addr ){
 			printf("Cache hit.\n");
 			hit = 1;
+			printf("%d\n", cac[j].val);
 			return cac[j].val;
 		}
 	}
@@ -248,12 +257,16 @@ int read_xy(pthread_t tid, int addr){
 	}
 	if ( found != 1){
 		printf("Process not found. \n");
-		return -1;
+		return 0;
 	}
 	int phys;
 	char *val = malloc(128);
 	int value = 0;
 	phys = cse320_virt_to_phys(addr);
+	if ( phys == -1){
+		printf("Unable to read.\n");
+		return 0;
+	}
 	char mes[128] = "read ";
 	char num[30];
 	sprintf(num, "%d", phys);
@@ -275,6 +288,11 @@ int write_xyz(pthread_t tid, int addr, int var){
 	int i;
 	int free = -1;
 	int hit = 0;
+	int phys = cse320_virt_to_phys(addr);
+	if ( phys == -1 ){
+		printf("Unable to write.\n");
+		return 0;
+	}
 	for ( i = 0; i < 4; i ++ ){
 		if ( cac[i].addr == addr ){
 			printf("Cache hit.\n");
@@ -301,8 +319,6 @@ int write_xyz(pthread_t tid, int addr, int var){
 			cac[free].addr = addr;
 		}
 	}
-
-	int phys = cse320_virt_to_phys(addr);
 	char mes[128] = "write ";
 	char ad[30];
 	sprintf(ad, "%d %d", phys, var);
@@ -373,14 +389,16 @@ void main(){
 				print_binary(allocate_X(tid));
 			}else if(strncmp(cmd, "read", 4) == 0){
 				pthread_t tid = strtoul(args[0], NULL, 10);
-				int addr = atoi(args[1]);
+				int addr = strtoul(args[1], NULL, 2);
 				read_xy(tid, addr);
 			}else if(strncmp(cmd, "write", 5) == 0){
 				//write
 				pthread_t tid = strtoul(args[0], NULL, 10);
-				int addr = atoi(args[1]);
+				int addr = strtoul(args[1], NULL, 2);
 				int val = atoi(args[2]);
 				write_xyz(tid, addr, val);
+			}else {
+				printf("Invalid command.\n");
 			}
 		
 		}
