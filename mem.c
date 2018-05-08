@@ -6,7 +6,7 @@
 
 void main(){
 	//allocate 1024 bytes, then move using counters. 
-	void *mem = malloc(1024);
+	void *mem = calloc(1, 1024);
 	char *buf = malloc(128);
 	//go with separating mem into 4*256. 
 	int cnt[4] = {0, 256, 512, 768};

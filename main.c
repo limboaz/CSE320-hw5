@@ -20,7 +20,14 @@ typedef struct {
 	pt2 lev2[1024];
 }pt1;
 
+typedef struct {
+	int flag;
+	int addr;
+	int val;
+}cache;
+
 pt1 lev1[4];
+cache cac[4];
 
 //functions need to be created
 //return 0 on success
@@ -35,6 +42,22 @@ int allocate_x(pthread_t tid);	//done
 int read_xy(pthread_t tid, int addr);	//done
 int write_xyz(pthread_t tid, int addr, int var);	//done
 
+int access_cache(int addr){
+	int i;
+	int accessed = 0;
+	for ( i = 0; i < 4; i++){
+		if ( cac[i].flag == 1 && cac[i].addr == addr ){
+			accessed = 1;
+			printf("Cache hit.\n");
+			return cac[i].val;
+		}
+	}
+	if ( accessed != 1 ){
+		printf("Cache miss.\n");
+		errno = -1;
+		return errno;
+	}
+}
 //this function is from stackoverflow
 void print_binary(int num){
 	int cnt;
@@ -202,6 +225,19 @@ int allocate_X(pthread_t tid){
 }
 
 int read_xy(pthread_t tid, int addr){
+	int j;
+	int hit = -1;
+	for ( j = 0; j < 4; j++ ){
+		if ( cac[j].flag == 1 && cac[j].addr == addr ){
+			printf("Cache hit.\n");
+			hit = 1;
+			return cac[j].val;
+		}
+	}
+	if ( hit != 1 ){
+		printf("Cache miss.\n");
+	}
+	
 	int i;
 	int found = 0;
 	for ( i = 0; i < 4; i++){
@@ -236,6 +272,36 @@ int read_xy(pthread_t tid, int addr){
 }
 
 int write_xyz(pthread_t tid, int addr, int var){
+	int i;
+	int free = -1;
+	int hit = 0;
+	for ( i = 0; i < 4; i ++ ){
+		if ( cac[i].addr == addr ){
+			printf("Cache hit.\n");
+			cac[i].flag = 1;
+			cac[i].addr = addr;
+			cac[i].val = var;
+			hit = 1;
+			break;
+		}
+		if ( cac[i].flag != 1 ){
+			free = i;
+		}
+	}
+	if ( hit != 1 ){
+		printf("Cache miss\n");
+		if ( free == -1 ){
+			cac[0].flag = 1;
+			cac[0].val = var;
+			cac[0].addr = addr;
+			printf("Eviction.\n");
+		}else {
+			cac[free].flag = 1;
+			cac[free].val = var;
+			cac[free].addr = addr;
+		}
+	}
+
 	int phys = cse320_virt_to_phys(addr);
 	char mes[128] = "write ";
 	char ad[30];
